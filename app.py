@@ -1,56 +1,41 @@
 import streamlit as st
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
 
-st.set_page_config(page_title="MLB BvP Matchups", layout="wide")
+st.title("Batter vs Pitcher (BvP) Matchups")
+st.write("**Criteria:** AVG ≥ .200 and Minimum 5 AB")
 
-st.title("⚾ MLB Batter vs Pitcher Matchups (BvP)")
+# Example: SwishAnalytics URL (replace with your actual)
+swish_url = "https://www.swishanalytics.com/mlb/batter-vs-pitcher-matchups"
 
-st.markdown("""
-**Hitters Criteria:**  
-- Batting Avg ≥ .200 vs Pitcher  
-- Min 5 AB  
-""")
+# Example: RotoWire URL (replace with your actual)
+rotowire_url = "https://www.rotowire.com/baseball/daily-lineups.php"
 
-# -------------------------
-# Scraper Function
-# -------------------------
-def scrape_bvp():
-    """
-    Scrape BvP stats from SwishAnalytics.
-    This is a simplified example; we can adjust once the final URL is confirmed.
-    """
-    url = "https://swishanalytics.com/optimus/mlb/batter-vs-pitcher-stats"  # Update if needed
-    resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-    soup = BeautifulSoup(resp.text, "html.parser")
+# Function to load and filter tables
+def load_bvp_table(url):
+    try:
+        tables = pd.read_html(url)
+        df = tables[0]
+        # Rename columns if needed for uniformity
+        df.columns = [col.strip() for col in df.columns]
+        # Filter: AB ≥ 5 and AVG ≥ .200 if columns exist
+        if "AB" in df.columns and "AVG" in df.columns:
+            df = df[(df["AB"] >= 5) & (df["AVG"] >= 0.200)]
+        return df
+    except Exception as e:
+        st.error(f"Failed to scrape {url}: {e}")
+        return pd.DataFrame()
 
-    # Look for all tables in page
-    tables = pd.read_html(str(soup))
-    if not tables:
-        return pd.DataFrame(columns=["Batter", "Pitcher", "AB", "H", "XBH", "HR", "BB", "K", "AVG", "OBP", "SLG", "OPS"])
+swish_df = load_bvp_table(swish_url)
+rotowire_df = load_bvp_table(rotowire_url)
 
-    # Assume first table is our BvP table
-    df = tables[0]
+if not swish_df.empty:
+    st.subheader("SwishAnalytics BvP Matchups")
+    st.dataframe(swish_df)
 
-    # Rename columns if needed
-    df.columns = [c.strip() for c in df.columns]
+if not rotowire_df.empty:
+    st.subheader("RotoWire BvP Matchups")
+    st.dataframe(rotowire_df)
 
-    # Filter based on criteria
-    if 'AB' in df.columns and 'AVG' in df.columns:
-        df = df[(df['AB'] >= 5) & (df['AVG'] >= 0.200)]
-
-    return df.reset_index(drop=True)
-
-# -------------------------
-# Load Data
-# -------------------------
-with st.spinner("Scraping BvP data..."):
-    bvp_df = scrape_bvp()
-
-if bvp_df.empty:
-    st.error("No data found. Check source URL or adjust scraping logic.")
-else:
-    st.dataframe(bvp_df, use_container_width=True)
-
-st.caption("Data from SwishAnalytics / RotoWire (for demonstration purposes)")
+if swish_df.empty and rotowire_df.empty:
+    st.warning("No BvP matchups available or scraping blocked today.")
